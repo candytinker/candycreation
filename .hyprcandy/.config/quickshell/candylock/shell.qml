@@ -243,6 +243,7 @@ ShellRoot {
     property string mediaLoopStatus:    "none"  // none | track | playlist  (lowercase)
     property real   mediaPosition: 0            // seconds
     property real   mediaDuration: 0            // seconds
+    property real   _posTimestamp: 0             // Date.now() of last position update
 
     Process {
         id:mediaProc
@@ -269,43 +270,49 @@ ShellRoot {
         Component.onCompleted: running=true
     }
 
-    // ── Position/duration — single playerctl call, tab-separated ─────────────
+    // ── Position/duration — pipe-delimited for reliable parsing ───────────
     Process {
         id: posProc
-        property string _out: ""
-        // Returns "position\tlength_in_us" on one line via --format
-        command: ["playerctl","metadata","--format","{{position}}\t{{mpris:length}}"]
-        stdout: SplitParser {
-            splitMarker: "\n"
-            onRead: function(l){ posProc._out = l.trim() }
-        }
-        onRunningChanged: if(running) _out = ""
+        property string _line: ""
+        command: ["bash", "-c", "printf '%s|%s\\n' \"$(playerctl position 2>/dev/null)\" \"$(playerctl metadata mpris:length 2>/dev/null)\""]
+        stdout: SplitParser { splitMarker: "\n"; onRead: function(l){ if(l.trim()) posProc._line = l.trim() } }
+        onRunningChanged: if(running) _line = ""
         onExited: function() {
-            const parts = _out.split("\t")
-            if(parts.length >= 2) {
+            const parts = _line.split("|")
+            if (parts.length >= 2) {
                 const pos = parseFloat(parts[0])
                 const dur = parseFloat(parts[1]) / 1000000.0
-                if(!isNaN(pos) && pos >= 0)  root.mediaPosition = pos
-                if(!isNaN(dur) && dur > 0)   root.mediaDuration = dur
+                if (!isNaN(pos) && pos >= 0) { root.mediaPosition = pos; root._posTimestamp = Date.now() }
+                if (!isNaN(dur) && dur > 0)   root.mediaDuration = dur
             }
-            _out = ""
+            _line = ""
         }
     }
+    // Poll every second while Playing
     Timer {
         interval: 1000; repeat: true
         running: root.mediaStatus === "Playing"
-        onTriggered: { if(!posProc.running) posProc.running = true }
-        Component.onCompleted: { if(root.mediaStatus === "Playing") posProc.running = true }
+        onTriggered: if (!posProc.running) posProc.running = true
+        Component.onCompleted: posProc.running = true
+    }
+    // Smooth interpolation between polls — advance position by wall-clock elapsed time
+    Timer {
+        interval: 250; repeat: true
+        running: root.mediaStatus === "Playing" && root.mediaDuration > 0 && root._posTimestamp > 0
+        onTriggered: {
+            const now = Date.now()
+            const elapsed = (now - root._posTimestamp) / 1000.0
+            root._posTimestamp = now
+            root.mediaPosition = Math.min(root.mediaPosition + elapsed, root.mediaDuration)
+        }
     }
 
     // ── Seek ─────────────────────────────────────────────────────────────────
     Process {
         id: seekProc
-        property real _secs: 0
-        command: ["playerctl","position", seekProc._secs.toFixed(1)]
-        running: false
-        onExited: { running = false; if(!posProc.running) posProc.running = true }
-        function seek(secs) { _secs = secs; running = true }
+        property string _cmd: "true"
+        command: ["bash", "-c", seekProc._cmd]
+        function seek(secs) { _cmd = "playerctl position " + secs.toFixed(1); if(!running) running = true }
     }
 
     // ── Cava bridge: root-level string updated by lockCavaProc ───────────────
@@ -891,27 +898,6 @@ ShellRoot {
                                                 text: "󰽲"; font.pixelSize:32; font.family:"Symbols Nerd Font Mono"
                                                 color: root.cOnSurfVar; opacity: 0.35
                                             }
-                                            // Spindle — smooth canvas circle
-                                            Canvas {
-                                                anchors.centerIn: parent; visible: artImg.visible
-                                                width: 12; height: 12
-                                                onPaint: {
-                                                    var ctx = getContext("2d")
-                                                    ctx.reset()
-                                                    ctx.antialias = true
-                                                    // outer ring
-                                                    ctx.beginPath()
-                                                    ctx.arc(6, 6, 5, 0, 2 * Math.PI)
-                                                    ctx.fillStyle = Qt.rgba(root.cSurfHi.r, root.cSurfHi.g, root.cSurfHi.b, 0.92)
-                                                    ctx.fill()
-                                                    // inner dot
-                                                    ctx.beginPath()
-                                                    ctx.arc(6, 6, 2, 0, 2 * Math.PI)
-                                                    ctx.fillStyle = root.cPrimary
-                                                    ctx.fill()
-                                                }
-                                            }
-
                                             RotationAnimator on rotation {
                                                 from:0; to:360; duration:12000
                                                 loops:Animation.Infinite
