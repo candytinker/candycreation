@@ -733,7 +733,7 @@ ShellRoot {
                                                         gradient: Gradient {
                                                             orientation: Gradient.Horizontal
                                                             GradientStop { position: 0.0; color: root.cInvPrimary }
-                                                            GradientStop { position: 1.0; color: root.cPrimary }
+                                                            GradientStop { position: 1.0; color: root.cOnSecondary }
                                                         }
                                                     }
                                                 }
@@ -899,7 +899,7 @@ ShellRoot {
                                                 color: root.cOnSurfVar; opacity: 0.35
                                             }
                                             RotationAnimator on rotation {
-                                                from:0; to:360; duration:12000
+                                                from:0; to:360; duration:100000
                                                 loops:Animation.Infinite
                                                 running: root.mediaStatus === "Playing"
                                             }
