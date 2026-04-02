@@ -862,11 +862,12 @@ ShellRoot {
 
                                                 for(let i = 0; i < _barCount; i++) {
                                                     const angle = (i / _barCount) * Math.PI * 2 - Math.PI / 2
-                                                    const barH  = Math.max(2, (_bars[i] || 0) * maxBarH)
+                                                    const amp   = _bars[i] || 0
+                                                    const barH  = Math.max(2, amp * maxBarH)
 
                                                     ctx.beginPath()
-                                                    ctx.strokeStyle = Qt.rgba(root.cPrimary.r, root.cPrimary.g, root.cPrimary.b, 0.80)
-                                                    ctx.lineWidth = 2.5
+                                                    ctx.strokeStyle = Qt.rgba(root.cPrimary.r, root.cPrimary.g, root.cPrimary.b, 0.20 + amp * 0.60)
+                                                    ctx.lineWidth = 1.5
                                                     ctx.lineCap   = "round"
                                                     ctx.moveTo(cx + Math.cos(angle) * innerR,       cy + Math.sin(angle) * innerR)
                                                     ctx.lineTo(cx + Math.cos(angle) * (innerR + barH), cy + Math.sin(angle) * (innerR + barH))
